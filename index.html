@@ -1,148 +1,143 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Saturn & Rings — Live Simulation</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    #canvas-container { width: 100%; height: 100%; position: absolute; inset: 0; }
-    canvas { display: block; width: 100% !important; height: 100% !important; }
-    #hud {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      color: #c8e6ff;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      text-shadow: 0 0 8px rgba(0,150,255,0.6);
-      pointer-events: none;
-      z-index: 10;
-    }
-    #hud h1 {
-      font-size: 22px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      margin-bottom: 6px;
-      color: #fff;
-    }
-    #hud .label { opacity: 0.7; }
-    #hud .value { color: #7ec8ff; }
-    #controls {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 12px;
-      z-index: 10;
-    }
-    #controls button {
-      background: rgba(20,40,80,0.75);
-      border: 1px solid rgba(100,180,255,0.4);
-      color: #c8e6ff;
-      padding: 8px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      backdrop-filter: blur(6px);
-      transition: background 0.2s;
-    }
-    #controls button:hover {
-      background: rgba(40,80,140,0.9);
-    }
-    #fps {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      color: #6a9;
-      font-family: monospace;
-      font-size: 13px;
-      z-index: 10;
-    }
-    #error-box {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(40,0,0,0.9);
-      border: 1px solid #f66;
-      color: #fcc;
-      padding: 24px 32px;
-      border-radius: 12px;
-      font-family: system-ui, sans-serif;
-      max-width: 520px;
-      z-index: 100;
-      text-align: center;
-      line-height: 1.5;
-    }
-    #error-box h2 { color: #f88; margin-bottom: 12px; }
-    #error-box code { background: #300; padding: 2px 6px; border-radius: 4px; }
-  </style>
+<meta charset="utf-8">
+<title>Saturn & Rings — Live 3D</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --ink: #eef3ff;
+    --dim: #8fa6d8;
+    --panel: rgba(6,10,20,.82);
+    --line: #2a3550;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #000; overflow: hidden;
+    font-family: "DejaVu Sans", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+  }
+  canvas#gl {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh;
+    display: block;
+  }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 0 12px #000; }
+  #title { left: 2.2vw; top: 3.2vh; }
+  #title h1 {
+    font-size: 2.1vw; letter-spacing: .06em; font-weight: 800;
+  }
+  #title h2 {
+    margin: .5vh 0 2vh;
+    font-size: 1.15vw; font-weight: 600; color: var(--dim);
+  }
+  .stat {
+    display: flex; align-items: center; gap: .8vw;
+    margin-bottom: 1.6vh;
+  }
+  .stat i {
+    width: 1.1vw; height: 1.1vw;
+    border: 2px solid #9db6e8; border-radius: 50%;
+    position: relative; flex: none;
+  }
+  .stat i:after {
+    content: ""; position: absolute; inset: 28%;
+    background: #9db6e8; border-radius: 50%;
+  }
+  .stat small { display: block; color: var(--dim); font-size: .95vw; }
+  .stat b { font-size: 1.1vw; }
+  #shot {
+    right: 2.2vw; top: 3.4vh; text-align: right;
+  }
+  #shot .k { font-size: .8vw; color: var(--dim); letter-spacing: .25em; }
+  #shot .n { font-size: 1.35vw; font-weight: 800; letter-spacing: .08em; }
+  #live {
+    right: 1.8vw; bottom: 3vh; width: 20vw;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; font-size: .95vw;
+  }
+  #live .hd {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1.1vh 1vw; border-bottom: 1px solid var(--line);
+  }
+  #live .hd b {
+    color: #ff4d4d; font-size: 1.2vw;
+    display: flex; align-items: center; gap: .5vw;
+  }
+  #live .hd b:before {
+    content: ""; width: .9vw; height: .9vw;
+    background: #ff3b30; border-radius: 50%;
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 50% { opacity: .35; } }
+  #live .row {
+    display: flex; justify-content: space-between;
+    padding: 1vh 1vw;
+  }
+  #legend {
+    left: 1.8vw; bottom: 3vh; width: 15vw;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 1.3vh 1vw; font-size: .9vw;
+  }
+  #legend div {
+    display: flex; align-items: center; gap: .7vw; margin: .7vh 0;
+  }
+  #legend span.d {
+    width: .65vw; height: .65vw; border-radius: 50%; display: inline-block;
+  }
+  #legend span.r {
+    width: 1.3vw; height: 2px; background: #c9a86c; display: inline-block;
+  }
+  #error {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.85); z-index: 100;
+    align-items: center; justify-content: center;
+    flex-direction: column; text-align: center; padding: 2rem;
+  }
+  #error h2 { color: #f88; margin-bottom: 1rem; font-size: 1.6rem; }
+  #error p { color: #ccc; max-width: 480px; line-height: 1.5; }
+</style>
 </head>
 <body>
-  <div id="canvas-container"></div>
-  <div id="hud">
-    <h1>SATURN · LIVE</h1>
-    <div><span class="label">Distance</span> <span class="value" id="dist">—</span></div>
-    <div><span class="label">Orbital period</span> <span class="value">29.45 yr</span></div>
-    <div><span class="label">Ring system</span> <span class="value">A · B · C · Cassini</span></div>
-    <div><span class="label">Time scale</span> <span class="value" id="timescale">1×</span></div>
-  </div>
-  <div id="fps">— fps</div>
-  <div id="controls">
-    <button id="btn-orbit">Toggle Orbit Path</button>
-    <button id="btn-speed">Speed ×2</button>
-    <button id="btn-reset">Reset View</button>
-  </div>
+<canvas id="gl"></canvas>
 
-  <div id="error-box">
-    <h2>Simulation failed to load</h2>
-    <p id="error-msg">Unknown error</p>
-    <p style="margin-top:14px;font-size:13px;opacity:0.8">
-      Open the browser console (F12) for details.<br>
-      Best way: run <code>npx serve .</code> then open the local URL.
-    </p>
-  </div>
+<div class="hud" id="title">
+  <h1>SATURN · LIVE</h1>
+  <h2>PLANET + RING SYSTEM · REAL-TIME 3D</h2>
+  <div class="stat"><i></i><div><small>Equatorial Diameter</small><b>120,536 km</b></div></div>
+  <div class="stat"><i></i><div><small>Orbital Period</small><b>29.45 years</b></div></div>
+  <div class="stat"><i></i><div><small>Axial Tilt</small><b>26.7°</b></div></div>
+  <div class="stat"><i></i><div><small>Ring System</small><b>A · B · C · Cassini</b></div></div>
+</div>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
-    }
-  }
-  </script>
-  <script type="module">
-    // Catch any load / runtime error and show it on screen
-    window.addEventListener('error', (e) => {
-      const box = document.getElementById('error-box');
-      const msg = document.getElementById('error-msg');
-      box.style.display = 'block';
-      msg.textContent = e.message || String(e);
-      console.error(e);
-    });
+<div class="hud" id="shot">
+  <div class="k">CAMERA</div>
+  <div class="n" id="shotName">ORBITAL VIEW</div>
+</div>
 
-    window.addEventListener('unhandledrejection', (e) => {
-      const box = document.getElementById('error-box');
-      const msg = document.getElementById('error-msg');
-      box.style.display = 'block';
-      msg.textContent = e.reason?.message || String(e.reason);
-      console.error(e.reason);
-    });
+<div class="hud" id="legend">
+  <div><span class="d" style="background:#e8c890"></span>Saturn</div>
+  <div><span class="r"></span>Main Rings (A B C)</div>
+  <div><span class="d" style="background:#666"></span>Cassini Division</div>
+  <div><span class="d" style="background:#fff"></span>Stars</div>
+</div>
 
-    try {
-      await import('./main.js');
-    } catch (err) {
-      const box = document.getElementById('error-box');
-      const msg = document.getElementById('error-msg');
-      box.style.display = 'block';
-      msg.textContent = err.message || String(err);
-      console.error(err);
-    }
-  </script>
+<div class="hud" id="live">
+  <div class="hd"><b>LIVE</b><span id="clock">UTC —</span></div>
+  <div class="row"><span>Distance</span><b id="dist">—</b></div>
+  <div class="row"><span>Time Scale</span><b id="timescale">1×</b></div>
+  <div class="row"><span>FPS</span><b id="fps">—</b></div>
+</div>
+
+<div id="error">
+  <h2>WebGL failed to start</h2>
+  <p id="errMsg">Your browser could not create a WebGL context.<br>
+  Try Chrome/Edge with hardware acceleration enabled,<br>
+  or open this page via a local server (<code>npx serve .</code>).</p>
+</div>
+
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script type="module" src="./main.js"></script>
 </body>
 </html>

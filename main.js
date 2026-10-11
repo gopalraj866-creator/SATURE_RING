@@ -1,366 +1,427 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as THREE from "three";
 
-console.log('Saturn simulation starting...');
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+const QUALITY = params.get("q") || "high";
+const SIM_SPEED = parseFloat(params.get("speed") || "1");
 
-// ─────────────────────────────────────────────────────────────
-// Scene setup
-// ─────────────────────────────────────────────────────────────
-const container = document.getElementById('canvas-container');
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000010);
-
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 3000);
-camera.position.set(0, 35, 95);
-
-const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  powerPreference: 'high-performance',
-  alpha: false
-});
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.25;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-container.appendChild(renderer.domElement);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.minDistance = 30;
-controls.maxDistance = 500;
-controls.target.set(0, 0, 0);
-controls.update();
-
-// ─────────────────────────────────────────────────────────────
-// Starfield
-// ─────────────────────────────────────────────────────────────
-function createStarfield(count = 5000) {
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    const r = 400 + Math.random() * 1200;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
-    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-    positions[i * 3 + 2] = r * Math.cos(phi);
-
-    const t = Math.random();
-    colors[i * 3]     = 0.75 + t * 0.25;
-    colors[i * 3 + 1] = 0.8 + t * 0.2;
-    colors[i * 3 + 2] = 1.0;
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const mat = new THREE.PointsMaterial({
-    size: 1.6,
-    vertexColors: true,
-    sizeAttenuation: true,
-    transparent: true,
-    opacity: 0.95,
-    depthWrite: false
+// ---------------------------------------------------------------------------
+// Renderer – same solid pattern as the working Starlink project
+// ---------------------------------------------------------------------------
+const canvas = document.getElementById("gl");
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: QUALITY === "high",
+    powerPreference: "high-performance",
+    alpha: false
   });
-  return new THREE.Points(geo, mat);
+} catch (e) {
+  document.getElementById("error").style.display = "flex";
+  document.getElementById("errMsg").textContent = e.message || "Error creating WebGL context.";
+  throw e;
 }
-scene.add(createStarfield());
 
-// ─────────────────────────────────────────────────────────────
-// Lights – stronger so planet is never black
-// ─────────────────────────────────────────────────────────────
-const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.2);
-sunLight.position.set(180, 50, 100);
+renderer.setPixelRatio(1);                       // stable for streaming
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setClearColor(0x000008, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 4000);
+
+addEventListener("resize", () => {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// ---------------------------------------------------------------------------
+// Stars
+// ---------------------------------------------------------------------------
+{
+  const n = 6000;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const u = Math.random() * 2 - 1;
+    const a = Math.random() * Math.PI * 2;
+    const s = Math.sqrt(1 - u * u);
+    const r = 800 + Math.random() * 1400;
+    pos[i * 3]     = s * Math.cos(a) * r;
+    pos[i * 3 + 1] = u * r;
+    pos[i * 3 + 2] = s * Math.sin(a) * r;
+    const b = 0.4 + Math.pow(Math.random(), 2) * 0.6;
+    col[i * 3]     = b;
+    col[i * 3 + 1] = b * (0.92 + Math.random() * 0.08);
+    col[i * 3 + 2] = b * (1.05 + Math.random() * 0.1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({
+    size: 1.5, sizeAttenuation: false, vertexColors: true, depthWrite: false
+  })));
+}
+
+// ---------------------------------------------------------------------------
+// Lights
+// ---------------------------------------------------------------------------
+const sunDir = new THREE.Vector3(1.0, 0.3, 0.6).normalize();
+const sunLight = new THREE.DirectionalLight(0xfff4e0, 2.8);
+sunLight.position.copy(sunDir).multiplyScalar(300);
 scene.add(sunLight);
 
-const fillLight = new THREE.DirectionalLight(0x8899bb, 0.55);
-fillLight.position.set(-120, -30, -80);
-scene.add(fillLight);
+const fill = new THREE.DirectionalLight(0x6a80b0, 0.4);
+fill.position.set(-150, -40, -100);
+scene.add(fill);
 
-const ambient = new THREE.AmbientLight(0x334466, 0.45);
-scene.add(ambient);
+scene.add(new THREE.AmbientLight(0x1a2235, 0.35));
 
-// ─────────────────────────────────────────────────────────────
-// Saturn planet
-// ─────────────────────────────────────────────────────────────
-const SATURN_RADIUS = 20;
+// ---------------------------------------------------------------------------
+// Saturn
+// ---------------------------------------------------------------------------
+const R = 22;   // Saturn radius in scene units
 
-function createSaturnTexture() {
-  const size = 1024;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
+function makeSaturnTexture() {
+  const size = QUALITY === "high" ? 1024 : 512;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
 
-  // Base warm gradient
-  const grad = ctx.createLinearGradient(0, 0, 0, size);
-  grad.addColorStop(0.00, '#d4b07a');
-  grad.addColorStop(0.12, '#e8c890');
-  grad.addColorStop(0.25, '#c9a05e');
-  grad.addColorStop(0.40, '#e0bc88');
-  grad.addColorStop(0.55, '#b89050');
-  grad.addColorStop(0.70, '#d4b07a');
-  grad.addColorStop(0.85, '#e8c890');
-  grad.addColorStop(1.00, '#c9a05e');
-  ctx.fillStyle = grad;
+  const g = ctx.createLinearGradient(0, 0, 0, size);
+  g.addColorStop(0.00, "#d4b07a");
+  g.addColorStop(0.15, "#e8c890");
+  g.addColorStop(0.30, "#c9a05e");
+  g.addColorStop(0.45, "#e0bc88");
+  g.addColorStop(0.55, "#b89050");
+  g.addColorStop(0.70, "#d4b07a");
+  g.addColorStop(0.85, "#e8c890");
+  g.addColorStop(1.00, "#c9a05e");
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
 
-  // Horizontal atmospheric bands
-  for (let i = 0; i < 55; i++) {
+  for (let i = 0; i < 50; i++) {
     const y = Math.random() * size;
-    const h = 1 + Math.random() * 14;
-    const alpha = 0.07 + Math.random() * 0.22;
-    const dark = Math.random() > 0.5;
-    if (dark) {
-      ctx.fillStyle = `rgba(90, 60, 25, ${alpha})`;
-    } else {
-      ctx.fillStyle = `rgba(240, 210, 160, ${alpha * 0.7})`;
-    }
+    const h = 1 + Math.random() * 12;
+    const a = 0.08 + Math.random() * 0.2;
+    ctx.fillStyle = Math.random() > 0.5
+      ? `rgba(80,55,20,${a})`
+      : `rgba(245,220,170,${a * 0.6})`;
     ctx.fillRect(0, y, size, h);
   }
 
-  // Subtle noise
-  const imgData = ctx.getImageData(0, 0, size, size);
-  for (let i = 0; i < imgData.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 22;
-    imgData.data[i]     = Math.min(255, Math.max(0, imgData.data[i] + n));
-    imgData.data[i + 1] = Math.min(255, Math.max(0, imgData.data[i + 1] + n * 0.9));
-    imgData.data[i + 2] = Math.min(255, Math.max(0, imgData.data[i + 2] + n * 0.65));
+  const img = ctx.getImageData(0, 0, size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 20;
+    img.data[i]     = Math.min(255, Math.max(0, img.data[i] + n));
+    img.data[i + 1] = Math.min(255, Math.max(0, img.data[i + 1] + n * 0.9));
+    img.data[i + 2] = Math.min(255, Math.max(0, img.data[i + 2] + n * 0.7));
   }
-  ctx.putImageData(imgData, 0, 0);
+  ctx.putImageData(img, 0, 0);
 
-  const tex = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.anisotropy = 4;
   return tex;
 }
 
-const saturnGeo = new THREE.SphereGeometry(SATURN_RADIUS, 96, 64);
-const saturnMat = new THREE.MeshStandardMaterial({
-  map: createSaturnTexture(),
-  roughness: 0.82,
-  metalness: 0.04
-});
-const saturn = new THREE.Mesh(saturnGeo, saturnMat);
-saturn.rotation.z = THREE.MathUtils.degToRad(26.7); // axial tilt
-scene.add(saturn);
+const saturnGroup = new THREE.Group();
+scene.add(saturnGroup);
 
-// Soft atmosphere rim
-const atmo = new THREE.Mesh(
-  new THREE.SphereGeometry(SATURN_RADIUS * 1.03, 48, 32),
-  new THREE.MeshBasicMaterial({
-    color: 0xd4b08a,
-    transparent: true,
-    opacity: 0.07,
-    side: THREE.BackSide
+// Axial tilt 26.7°
+saturnGroup.rotation.z = THREE.MathUtils.degToRad(26.7);
+
+const saturnSeg = QUALITY === "high" ? [96, 64] : [48, 32];
+const saturn = new THREE.Mesh(
+  new THREE.SphereGeometry(R, ...saturnSeg),
+  new THREE.MeshStandardMaterial({
+    map: makeSaturnTexture(),
+    roughness: 0.85,
+    metalness: 0.03
   })
 );
-saturn.add(atmo);
+saturnGroup.add(saturn);
 
-// ─────────────────────────────────────────────────────────────
-// Ring system
-// ─────────────────────────────────────────────────────────────
-function createRingTexture() {
-  const size = 1024;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, size, 64);
+// Soft atmosphere
+saturnGroup.add(new THREE.Mesh(
+  new THREE.SphereGeometry(R * 1.025, 32, 24),
+  new THREE.MeshBasicMaterial({
+    color: 0xd4b08a, transparent: true, opacity: 0.06, side: THREE.BackSide
+  })
+));
 
-  // Approximate real ring structure
+// ---------------------------------------------------------------------------
+// Rings
+// ---------------------------------------------------------------------------
+function makeRingTexture() {
+  const w = 1024, h = 32;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, w, h);
+
   const bands = [
-    { start: 0.00, end: 0.17, dens: 0.18, color: [190, 170, 140] }, // C
-    { start: 0.17, end: 0.50, dens: 0.90, color: [230, 210, 175] }, // B (bright)
-    { start: 0.50, end: 0.57, dens: 0.04, color: [80, 70, 55]   }, // Cassini
-    { start: 0.57, end: 0.84, dens: 0.60, color: [210, 195, 160] }, // A
-    { start: 0.84, end: 0.90, dens: 0.15, color: [160, 145, 120] },
-    { start: 0.90, end: 1.00, dens: 0.28, color: [195, 180, 150] }
+    { s: 0.00, e: 0.16, d: 0.20, col: [185, 165, 135] }, // C
+    { s: 0.16, e: 0.48, d: 0.92, col: [230, 210, 175] }, // B
+    { s: 0.48, e: 0.55, d: 0.05, col: [70, 60, 45]    }, // Cassini
+    { s: 0.55, e: 0.82, d: 0.62, col: [210, 195, 160] }, // A
+    { s: 0.82, e: 0.88, d: 0.15, col: [155, 140, 115] },
+    { s: 0.88, e: 1.00, d: 0.30, col: [195, 180, 150] }
   ];
 
-  for (let x = 0; x < size; x++) {
-    const t = x / size;
-    let dens = 0;
-    let col = [190, 170, 140];
+  for (let x = 0; x < w; x++) {
+    const t = x / w;
+    let dens = 0, col = [190, 170, 140];
     for (const b of bands) {
-      if (t >= b.start && t < b.end) {
-        dens = b.dens * (0.75 + 0.25 * Math.sin(t * 90));
-        col = b.color;
+      if (t >= b.s && t < b.e) {
+        dens = b.d * (0.78 + 0.22 * Math.sin(t * 85));
+        col = b.col;
         break;
       }
     }
-    dens *= 0.85 + 0.15 * Math.sin(t * 380);
+    dens *= 0.88 + 0.12 * Math.sin(t * 400);
     const a = Math.floor(Math.min(1, dens) * 255);
     ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${a / 255})`;
-    ctx.fillRect(x, 0, 1, 64);
+    ctx.fillRect(x, 0, 1, h);
   }
 
-  const tex = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.ClampToEdgeWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.anisotropy = 4;
   return tex;
 }
 
-const ringInner = SATURN_RADIUS * 1.22;
-const ringOuter = SATURN_RADIUS * 2.4;
+const ringInner = R * 1.23;
+const ringOuter = R * 2.35;
 
-const ringGeo = new THREE.RingGeometry(ringInner, ringOuter, 256, 6);
-const pos = ringGeo.attributes.position;
-const uv = ringGeo.attributes.uv;
-for (let i = 0; i < pos.count; i++) {
-  const x = pos.getX(i);
-  const y = pos.getY(i);
-  const r = Math.sqrt(x * x + y * y);
-  const u = (r - ringInner) / (ringOuter - ringInner);
-  uv.setXY(i, u, 0.5);
-}
-uv.needsUpdate = true;
-
-const ringMat = new THREE.MeshStandardMaterial({
-  map: createRingTexture(),
-  side: THREE.DoubleSide,
-  transparent: true,
-  opacity: 0.95,
-  roughness: 0.65,
-  metalness: 0.08,
-  depthWrite: false
-});
-const rings = new THREE.Mesh(ringGeo, ringMat);
-rings.rotation.x = -Math.PI / 2;
-rings.rotation.z = THREE.MathUtils.degToRad(26.7);
-saturn.add(rings);
-
-// Extra particle layer for depth
-function createParticleRings() {
-  const count = 9000;
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    const r = ringInner + Math.random() * (ringOuter - ringInner);
-    const theta = Math.random() * Math.PI * 2;
-    const z = (Math.random() - 0.5) * 0.35;
-    positions[i * 3]     = r * Math.cos(theta);
-    positions[i * 3 + 1] = z;
-    positions[i * 3 + 2] = r * Math.sin(theta);
-
-    const t = (r - ringInner) / (ringOuter - ringInner);
-    colors[i * 3]     = 0.8 + t * 0.15;
-    colors[i * 3 + 1] = 0.75 + t * 0.12;
-    colors[i * 3 + 2] = 0.6 + t * 0.1;
+const ringGeo = new THREE.RingGeometry(ringInner, ringOuter, 192, 4);
+// radial UVs
+{
+  const pos = ringGeo.attributes.position;
+  const uv  = ringGeo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);
+    const r = Math.sqrt(x * x + y * y);
+    uv.setXY(i, (r - ringInner) / (ringOuter - ringInner), 0.5);
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const mat = new THREE.PointsMaterial({
-    size: 0.22,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.5,
-    sizeAttenuation: true,
-    depthWrite: false
-  });
-  const pts = new THREE.Points(geo, mat);
-  pts.rotation.x = -Math.PI / 2;
-  pts.rotation.z = THREE.MathUtils.degToRad(26.7);
-  return pts;
+  uv.needsUpdate = true;
 }
-saturn.add(createParticleRings());
 
-// ─────────────────────────────────────────────────────────────
-// Orbital path + distant sun
-// ─────────────────────────────────────────────────────────────
-const orbitRadius = 320;
-const orbitCurve = new THREE.EllipseCurve(0, 0, orbitRadius, orbitRadius * 0.97, 0, Math.PI * 2, false, 0);
-const orbitPts = orbitCurve.getPoints(180).map(p => new THREE.Vector3(p.x, 0, p.y));
-const orbitLine = new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints(orbitPts),
-  new THREE.LineBasicMaterial({ color: 0x3a6a9a, transparent: true, opacity: 0.4 })
+const rings = new THREE.Mesh(
+  ringGeo,
+  new THREE.MeshStandardMaterial({
+    map: makeRingTexture(),
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95,
+    roughness: 0.7,
+    metalness: 0.05,
+    depthWrite: false
+  })
 );
-scene.add(orbitLine);
+rings.rotation.x = -Math.PI / 2;
+saturnGroup.add(rings);
 
+// Fine particle ring layer
+{
+  const n = QUALITY === "high" ? 7000 : 3000;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const r = ringInner + Math.random() * (ringOuter - ringInner);
+    const th = Math.random() * Math.PI * 2;
+    const z = (Math.random() - 0.5) * 0.3;
+    pos[i * 3]     = r * Math.cos(th);
+    pos[i * 3 + 1] = z;
+    pos[i * 3 + 2] = r * Math.sin(th);
+    const t = (r - ringInner) / (ringOuter - ringInner);
+    col[i * 3]     = 0.78 + t * 0.18;
+    col[i * 3 + 1] = 0.72 + t * 0.14;
+    col[i * 3 + 2] = 0.55 + t * 0.12;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({
+    size: 0.2, vertexColors: true, transparent: true,
+    opacity: 0.45, sizeAttenuation: true, depthWrite: false
+  }));
+  pts.rotation.x = -Math.PI / 2;
+  saturnGroup.add(pts);
+}
+
+// ---------------------------------------------------------------------------
+// Distant sun marker
+// ---------------------------------------------------------------------------
 const sun = new THREE.Mesh(
-  new THREE.SphereGeometry(8, 24, 16),
+  new THREE.SphereGeometry(5, 16, 12),
   new THREE.MeshBasicMaterial({ color: 0xfff0c0 })
 );
-sun.position.set(orbitRadius + 50, 0, 0);
+sun.position.copy(sunDir).multiplyScalar(420);
 scene.add(sun);
+scene.add(new THREE.Mesh(
+  new THREE.SphereGeometry(12, 16, 12),
+  new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.12 })
+)).position.copy(sun.position);
 
-const sunGlow = new THREE.Mesh(
-  new THREE.SphereGeometry(18, 24, 16),
-  new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.18 })
-);
-sun.add(sunGlow);
+// ---------------------------------------------------------------------------
+// Cinematic camera director  (inspired by the working Starlink project)
+// ---------------------------------------------------------------------------
+const shots = [
+  { // slow orbit – classic beauty shot
+    name: "ORBITAL VIEW",
+    duration: 28,
+    fn: (t, out) => {
+      const a = t * 0.09;
+      const elev = 0.32 + Math.sin(t * 0.07) * 0.08;
+      const dist = 95 + Math.sin(t * 0.05) * 12;
+      out.pos.set(
+        Math.cos(a) * dist * Math.cos(elev),
+        Math.sin(elev) * dist * 0.9,
+        Math.sin(a) * dist * Math.cos(elev)
+      );
+      out.look.set(0, 0, 0);
+      out.fov = 48;
+    }
+  },
+  { // low ring plane glide
+    name: "RING PLANE",
+    duration: 22,
+    fn: (t, out) => {
+      const a = t * 0.07 + 1.2;
+      const dist = 70 + Math.sin(t * 0.1) * 8;
+      out.pos.set(Math.cos(a) * dist, 6 + Math.sin(t * 0.15) * 3, Math.sin(a) * dist);
+      out.look.set(0, -2, 0);
+      out.fov = 52;
+    }
+  },
+  { // high dramatic tilt
+    name: "HIGH ANGLE",
+    duration: 20,
+    fn: (t, out) => {
+      const a = t * 0.06 + 2.5;
+      const elev = 0.85 + Math.sin(t * 0.08) * 0.1;
+      const dist = 110;
+      out.pos.set(
+        Math.cos(a) * dist * Math.cos(elev),
+        Math.sin(elev) * dist,
+        Math.sin(a) * dist * Math.cos(elev)
+      );
+      out.look.set(0, 0, 0);
+      out.fov = 45;
+    }
+  },
+  { // close approach
+    name: "CLOSE APPROACH",
+    duration: 18,
+    fn: (t, out) => {
+      const a = t * 0.11 + 4.0;
+      const dist = 48 + Math.sin(t * 0.2) * 6;
+      out.pos.set(Math.cos(a) * dist, 18 + Math.sin(t * 0.12) * 5, Math.sin(a) * dist);
+      out.look.set(0, 2, 0);
+      out.fov = 55;
+    }
+  },
+  { // side-on classic portrait
+    name: "PORTRAIT",
+    duration: 24,
+    fn: (t, out) => {
+      const a = Math.PI * 0.5 + Math.sin(t * 0.04) * 0.25;
+      const elev = 0.15 + Math.sin(t * 0.06) * 0.05;
+      const dist = 100;
+      out.pos.set(
+        Math.cos(a) * dist * Math.cos(elev),
+        Math.sin(elev) * dist,
+        Math.sin(a) * dist * Math.cos(elev)
+      );
+      out.look.set(0, 0, 0);
+      out.fov = 46;
+    }
+  }
+];
 
-// ─────────────────────────────────────────────────────────────
-// Animation state
-// ─────────────────────────────────────────────────────────────
-let timeScale = 1;
-let saturnAngle = 0;
+let shotIdx = 0;
+let shotTime = 0;
+const camPos  = new THREE.Vector3(0, 40, 100);
+const camLook = new THREE.Vector3(0, 0, 0);
+const _tmp = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 48 };
+
+function updateCamera(dt) {
+  shotTime += dt;
+  const shot = shots[shotIdx];
+  if (shotTime > shot.duration) {
+    shotTime = 0;
+    shotIdx = (shotIdx + 1) % shots.length;
+    document.getElementById("shotName").textContent = shots[shotIdx].name;
+  }
+  const s = shots[shotIdx];
+  s.fn(shotTime, _tmp);
+
+  // smooth follow
+  camPos.lerp(_tmp.pos, 1 - Math.pow(0.001, dt));
+  camLook.lerp(_tmp.look, 1 - Math.pow(0.002, dt));
+  camera.position.copy(camPos);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(camLook);
+  if (Math.abs(camera.fov - _tmp.fov) > 0.05) {
+    camera.fov = THREE.MathUtils.lerp(camera.fov, _tmp.fov, 0.04);
+    camera.updateProjectionMatrix();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HUD helpers
+// ---------------------------------------------------------------------------
+const distEl = document.getElementById("dist");
+const fpsEl  = document.getElementById("fps");
+const clockEl = document.getElementById("clock");
+const timescaleEl = document.getElementById("timescale");
+timescaleEl.textContent = SIM_SPEED + "×";
+
+let frames = 0, lastFps = performance.now();
+
+function updateClock() {
+  const d = new Date();
+  clockEl.textContent = "UTC " + d.toISOString().substr(11, 8);
+}
+
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
 const clock = new THREE.Clock();
-let frameCount = 0;
-let lastFpsTime = performance.now();
+document.getElementById("shotName").textContent = shots[0].name;
 
-const distEl = document.getElementById('dist');
-const timescaleEl = document.getElementById('timescale');
-const fpsEl = document.getElementById('fps');
-
-document.getElementById('btn-orbit').addEventListener('click', () => {
-  orbitLine.visible = !orbitLine.visible;
-});
-
-document.getElementById('btn-speed').addEventListener('click', () => {
-  timeScale = timeScale >= 16 ? 1 : timeScale * 2;
-  timescaleEl.textContent = timeScale + '×';
-  document.getElementById('btn-speed').textContent =
-    timeScale >= 16 ? 'Speed ×1' : `Speed ×${timeScale * 2}`;
-});
-
-document.getElementById('btn-reset').addEventListener('click', () => {
-  camera.position.set(0, 35, 95);
-  controls.target.set(0, 0, 0);
-  controls.update();
-});
-
-// ─────────────────────────────────────────────────────────────
-// Render loop
-// ─────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
-  const dt = clock.getDelta();
+  const dt = Math.min(clock.getDelta(), 0.1) * SIM_SPEED;
 
-  // Self rotation
-  saturn.rotation.y += dt * 0.12 * timeScale;
+  // Saturn slow self-rotation
+  saturn.rotation.y += dt * 0.08;
 
-  // Slow orbit visualization
-  saturnAngle += dt * 0.006 * timeScale;
-  orbitLine.rotation.y = -saturnAngle;
+  updateCamera(dt);
 
   // HUD
-  const camDist = camera.position.length();
-  distEl.textContent = (camDist * 0.07).toFixed(1) + ' Rₛ';
+  const dist = camera.position.length();
+  distEl.textContent = (dist * 0.085).toFixed(1) + " Rₛ";
 
-  controls.update();
-  renderer.render(scene, camera);
-
-  // FPS
-  frameCount++;
+  frames++;
   const now = performance.now();
-  if (now - lastFpsTime >= 1000) {
-    fpsEl.textContent = frameCount + ' fps';
-    frameCount = 0;
-    lastFpsTime = now;
+  if (now - lastFps >= 1000) {
+    fpsEl.textContent = frames;
+    frames = 0;
+    lastFps = now;
+    updateClock();
   }
+
+  renderer.render(scene, camera);
 }
 
 animate();
-console.log('Saturn simulation running');
-
-// Resize
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+console.log("Saturn Live simulation running");

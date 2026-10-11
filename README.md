@@ -1,99 +1,66 @@
-# Saturn & Rings — Live 3D Simulation → YouTube Stream
+# Saturn & Rings — Live 3D Simulation
 
-Real-time interactive simulation of Saturn and its ring system built with **Three.js**.  
-Includes a **GitHub Actions workflow** that streams the simulation directly to YouTube using your stream key.
+Real-time cinematic simulation of Saturn and its ring system.  
+Built with the same solid architecture as the working Starlink 3D project (local Three.js, no CDN).
 
----
-
-## IMPORTANT – How to run correctly
-
-**Do NOT just double-click `index.html`.**  
-Browsers block ES modules when opened as `file://`, so you will see a black screen.
-
-### Correct way (local preview)
+## Quick start (local)
 
 ```bash
-# From the project folder:
+# From this folder:
 npx serve .
 # or
 python -m http.server 8080
 ```
 
-Then open the URL it shows (usually http://localhost:3000 or http://localhost:8080).
+Open the URL shown (http://localhost:3000 or :8080).  
+You should see Saturn + rings + stars with a moving cinematic camera.
 
-You should see Saturn + rings + stars immediately.
-
----
+**Do not open index.html by double-clicking** — that often causes WebGL / module errors.
 
 ## Features
 
 - Procedural Saturn texture with atmospheric bands
-- Multi-layer rings (C · B · Cassini · A) + particle overlay
-- Correct axial tilt (26.7°)
-- Starfield + distant Sun + orbital path
-- Time-scale control, orbit toggle, camera reset
-- Automated YouTube streaming via GitHub Actions
+- Multi-layer rings (C · B · Cassini Division · A) + particle layer
+- Correct 26.7° axial tilt
+- Cinematic camera director (5 automatic shots that cycle)
+- Clean live HUD
+- Local vendored Three.js (works offline / in restricted environments)
 
----
+## Streaming to YouTube
 
-## Stream to YouTube with GitHub Actions
+### Best quality – OBS Browser Source (recommended)
 
-### 1. Add your Stream Key
-
-1. YouTube Studio → **Go Live** → copy **Stream key**
-2. GitHub repo → **Settings → Secrets and variables → Actions**
-3. New secret:
-   - Name: `YOUTUBE_STREAM_KEY`
-   - Value: paste the key
-
-### 2. Start the stream
-
-1. Go to **Actions** tab
-2. Select **“Stream Saturn to YouTube”**
-3. Click **Run workflow**
-4. Choose duration / resolution / FPS
-5. Run
-
-The workflow opens the simulation in headless Chromium and pushes it to YouTube via RTMP.
-
-> Free GitHub runners have a ~6 hour limit.  
-> For longer streams use a self-hosted runner or VPS.
-
----
-
-## Manual streaming with OBS (recommended for quality)
-
-1. Serve the page: `npx serve .`
+1. Run `npx serve .`
 2. In OBS → Add **Browser Source**
-3. URL: `http://localhost:3000` (or whatever port)
-4. Width × Height: 1920 × 1080
-5. Start streaming to YouTube normally
+3. URL = `http://localhost:3000`
+4. Size = 1920 × 1080
+5. Start streaming to YouTube with your normal key
 
-This usually gives better quality and stability than the GitHub Action method.
+### Automated – GitHub Actions
 
----
+1. Push this repo to GitHub
+2. Add secret `YOUTUBE_STREAM_KEY` (from YouTube Studio → Go Live)
+3. Actions → **Stream Saturn Live to YouTube** → Run workflow
+4. Choose duration / resolution / FPS
 
-## Controls
+Free runners max ~6 hours. For longer streams use a self-hosted runner or VPS.
 
-| Action            | Input                  |
-|-------------------|------------------------|
-| Orbit camera      | Left-drag              |
-| Zoom              | Scroll                 |
-| Pan               | Right-drag             |
-| Toggle orbit path | Button                 |
-| Change time scale | Button                 |
-| Reset camera      | Button                 |
+## Controls / URL params
 
----
+| Param     | Example          | Effect                |
+|-----------|------------------|-----------------------|
+| `?q=low`  | lower quality    | fewer polygons        |
+| `?speed=2`| 2× simulation    | faster rotation       |
+
+Camera is fully automatic (cinematic shots). No mouse controls needed for streaming.
 
 ## Tech
 
-- Three.js r170 (ES modules)
-- Procedural canvas textures (no external images)
-- GitHub Actions + Xvfb + Chromium + FFmpeg → YouTube
-
----
+- Three.js (vendored locally – same as the working Starlink project)
+- Procedural canvas textures
+- Cinematic camera director
+- GitHub Actions + Xvfb + Chromium + FFmpeg → YouTube RTMP
 
 ## License
 
-MIT — free for personal & commercial use including live streams.
+MIT
