@@ -1,1 +1,199 @@
+# ─────────────────────────────────────────────────────────────
+# Stream Saturn Live Simulation → YouTube
+# ─────────────────────────────────────────────────────────────
+# How to use:
+# 1. Go to your repo → Settings → Secrets and variables → Actions
+# 2. Create a secret named: YOUTUBE_STREAM_KEY
+#    (get it from YouTube Studio → Go Live → Stream key)
+# 3. (Optional) Create secret YOUTUBE_RTMP_URL if you use a custom ingest
+#    Default: rtmp://a.rtmp.youtube.com/live2
+# 4. Actions tab → "Stream Saturn to YouTube" → Run workflow
+# 5. Choose duration (minutes) and click "Run workflow"
+#
+# Notes:
+# - Free GitHub Actions runners have a 6-hour job limit.
+# - For 24/7 streaming use a self-hosted runner or VPS.
+# - Make sure your YouTube channel is verified & Live Streaming is enabled.
+# ─────────────────────────────────────────────────────────────
 
+name: Stream Saturn to YouTube
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration_minutes:
+        description: "How long to stream (minutes, max 330 ≈ 5.5 h)"
+        required: true
+        default: "60"
+        type: string
+      resolution:
+        description: "Output resolution"
+        required: true
+        default: "1920x1080"
+        type: choice
+        options:
+          - "1280x720"
+          - "1920x1080"
+          - "2560x1440"
+      fps:
+        description: "Frames per second"
+        required: true
+        default: "30"
+        type: choice
+        options:
+          - "24"
+          - "30"
+          - "60"
+
+jobs:
+  stream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # safety limit
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            xvfb \
+            x11-utils \
+            chromium-browser \
+            ffmpeg \
+            python3 \
+            curl \
+            fonts-liberation \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libgtk-3-0 \
+            libx11-xcb1 \
+            libxcb-dri3-0 \
+            libdrm2 \
+            libgbm1 \
+            libasound2t64 || \
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            xvfb x11-utils chromium-browser ffmpeg python3 curl \
+            fonts-liberation libnss3 libatk-bridge2.0-0 libgtk-3-0 \
+            libx11-xcb1 libxcb-dri3-0 libdrm2 libgbm1
+
+      - name: Start local HTTP server
+        run: |
+          python3 -m http.server 8080 --directory . &
+          echo $! > /tmp/http-server.pid
+          sleep 2
+          curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ | grep -q 200
+          echo "HTTP server is up"
+
+      - name: Start virtual display (Xvfb)
+        run: |
+          # Parse resolution
+          RES="${{ github.event.inputs.resolution }}"
+          WIDTH=$(echo $RES | cut -d'x' -f1)
+          HEIGHT=$(echo $RES | cut -d'x' -f2)
+          echo "Display size: ${WIDTH}x${HEIGHT}"
+
+          Xvfb :99 -screen 0 ${WIDTH}x${HEIGHT}x24 -ac +extension GLX +render -noreset &
+          echo $! > /tmp/xvfb.pid
+          sleep 2
+          export DISPLAY=:99
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+          xdpyinfo -display :99 >/dev/null && echo "Xvfb ready"
+
+      - name: Launch Chromium (full-screen simulation)
+        run: |
+          RES="${{ github.event.inputs.resolution }}"
+          WIDTH=$(echo $RES | cut -d'x' -f1)
+          HEIGHT=$(echo $RES | cut -d'x' -f2)
+
+          # Prefer chromium-browser, fall back to chromium / google-chrome
+          CHROME=$(command -v chromium-browser || command -v chromium || command -v google-chrome)
+
+          $CHROME \
+            --display=:99 \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-software-rasterizer \
+            --window-size=${WIDTH},${HEIGHT} \
+            --window-position=0,0 \
+            --start-fullscreen \
+            --kiosk \
+            --app=http://127.0.0.1:8080/ \
+            --disable-infobars \
+            --disable-session-crashed-bubble \
+            --no-first-run \
+            --autoplay-policy=no-user-gesture-required \
+            > /tmp/chrome.log 2>&1 &
+          echo $! > /tmp/chrome.pid
+          sleep 8
+          echo "Chromium started (PID $(cat /tmp/chrome.pid))"
+
+      - name: Stream to YouTube with FFmpeg
+        env:
+          YOUTUBE_STREAM_KEY: ${{ secrets.YOUTUBE_STREAM_KEY }}
+          YOUTUBE_RTMP_URL: ${{ secrets.YOUTUBE_RTMP_URL }}
+        run: |
+          if [ -z "$YOUTUBE_STREAM_KEY" ]; then
+            echo "::error::Secret YOUTUBE_STREAM_KEY is not set!"
+            echo "Go to Settings → Secrets and variables → Actions → New repository secret"
+            echo "Name: YOUTUBE_STREAM_KEY   Value: your YouTube stream key"
+            exit 1
+          fi
+
+          RTMP_BASE="${YOUTUBE_RTMP_URL:-rtmp://a.rtmp.youtube.com/live2}"
+          RTMP_DEST="${RTMP_BASE}/${YOUTUBE_STREAM_KEY}"
+
+          RES="${{ github.event.inputs.resolution }}"
+          FPS="${{ github.event.inputs.fps }}"
+          DURATION_MIN="${{ github.event.inputs.duration_minutes }}"
+          DURATION_SEC=$(( DURATION_MIN * 60 ))
+
+          echo "=============================================="
+          echo "  Streaming Saturn Live → YouTube"
+          echo "  Resolution : $RES"
+          echo "  FPS        : $FPS"
+          echo "  Duration   : ${DURATION_MIN} minutes"
+          echo "  RTMP       : ${RTMP_BASE}/*****"
+          echo "=============================================="
+
+          # Capture the virtual display and push to YouTube
+          # -f x11grab      : capture X11 screen
+          # -framerate     : target fps
+          # -video_size    : resolution
+          # -i :99.0       : display
+          # libx264 + aac  : YouTube-compatible encoding
+          # -f flv         : RTMP container
+
+          timeout ${DURATION_SEC} ffmpeg -y \
+            -f x11grab \
+            -framerate ${FPS} \
+            -video_size ${RES} \
+            -i :99.0 \
+            -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
+            -c:v libx264 \
+            -preset veryfast \
+            -tune zerolatency \
+            -b:v 4500k \
+            -maxrate 4500k \
+            -bufsize 9000k \
+            -pix_fmt yuv420p \
+            -g $((FPS * 2)) \
+            -c:a aac \
+            -b:a 128k \
+            -ar 44100 \
+            -f flv \
+            "${RTMP_DEST}" \
+            2>&1 | tee /tmp/ffmpeg.log
+
+          echo "FFmpeg finished (or timed out after ${DURATION_MIN} min)"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Stopping processes..."
+          [ -f /tmp/chrome.pid ] && kill $(cat /tmp/chrome.pid) 2>/dev/null || true
+          [ -f /tmp/xvfb.pid ]   && kill $(cat /tmp/xvfb.pid)   2>/dev/null || true
+          [ -f /tmp/http-server.pid ] && kill $(cat /tmp/http-server.pid) 2>/dev/null || true
+          echo "Done."
