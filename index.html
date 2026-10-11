@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Saturn & Rings — Live Simulation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    #canvas-container { width: 100%; height: 100%; }
+    canvas { display: block; }
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #c8e6ff;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      text-shadow: 0 0 8px rgba(0,150,255,0.6);
+      pointer-events: none;
+      z-index: 10;
+    }
+    #hud h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+      color: #fff;
+    }
+    #hud .label { opacity: 0.7; }
+    #hud .value { color: #7ec8ff; }
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      z-index: 10;
+    }
+    #controls button {
+      background: rgba(20,40,80,0.75);
+      border: 1px solid rgba(100,180,255,0.4);
+      color: #c8e6ff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      backdrop-filter: blur(6px);
+      transition: background 0.2s;
+    }
+    #controls button:hover {
+      background: rgba(40,80,140,0.9);
+    }
+    #fps {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: #6a9;
+      font-family: monospace;
+      font-size: 13px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="hud">
+    <h1>SATURN · LIVE</h1>
+    <div><span class="label">Distance</span> <span class="value" id="dist">—</span></div>
+    <div><span class="label">Orbital period</span> <span class="value">29.45 yr</span></div>
+    <div><span class="label">Ring system</span> <span class="value">A · B · C · Cassini</span></div>
+    <div><span class="label">Time scale</span> <span class="value" id="timescale">1×</span></div>
+  </div>
+  <div id="fps">— fps</div>
+  <div id="controls">
+    <button id="btn-orbit">Toggle Orbit Path</button>
+    <button id="btn-speed">Speed ×2</button>
+    <button id="btn-reset">Reset View</button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
