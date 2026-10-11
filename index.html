@@ -7,8 +7,8 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    #canvas-container { width: 100%; height: 100%; }
-    canvas { display: block; }
+    #canvas-container { width: 100%; height: 100%; position: absolute; inset: 0; }
+    canvas { display: block; width: 100% !important; height: 100% !important; }
     #hud {
       position: absolute;
       top: 20px;
@@ -62,6 +62,25 @@
       font-size: 13px;
       z-index: 10;
     }
+    #error-box {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(40,0,0,0.9);
+      border: 1px solid #f66;
+      color: #fcc;
+      padding: 24px 32px;
+      border-radius: 12px;
+      font-family: system-ui, sans-serif;
+      max-width: 520px;
+      z-index: 100;
+      text-align: center;
+      line-height: 1.5;
+    }
+    #error-box h2 { color: #f88; margin-bottom: 12px; }
+    #error-box code { background: #300; padding: 2px 6px; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -80,6 +99,15 @@
     <button id="btn-reset">Reset View</button>
   </div>
 
+  <div id="error-box">
+    <h2>Simulation failed to load</h2>
+    <p id="error-msg">Unknown error</p>
+    <p style="margin-top:14px;font-size:13px;opacity:0.8">
+      Open the browser console (F12) for details.<br>
+      Best way: run <code>npx serve .</code> then open the local URL.
+    </p>
+  </div>
+
   <script type="importmap">
   {
     "imports": {
@@ -88,6 +116,33 @@
     }
   }
   </script>
-  <script type="module" src="./main.js"></script>
+  <script type="module">
+    // Catch any load / runtime error and show it on screen
+    window.addEventListener('error', (e) => {
+      const box = document.getElementById('error-box');
+      const msg = document.getElementById('error-msg');
+      box.style.display = 'block';
+      msg.textContent = e.message || String(e);
+      console.error(e);
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+      const box = document.getElementById('error-box');
+      const msg = document.getElementById('error-msg');
+      box.style.display = 'block';
+      msg.textContent = e.reason?.message || String(e.reason);
+      console.error(e.reason);
+    });
+
+    try {
+      await import('./main.js');
+    } catch (err) {
+      const box = document.getElementById('error-box');
+      const msg = document.getElementById('error-msg');
+      box.style.display = 'block';
+      msg.textContent = err.message || String(err);
+      console.error(err);
+    }
+  </script>
 </body>
 </html>

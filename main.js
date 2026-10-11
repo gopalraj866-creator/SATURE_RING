@@ -1,39 +1,46 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+console.log('Saturn simulation starting...');
+
 // ─────────────────────────────────────────────────────────────
 // Scene setup
 // ─────────────────────────────────────────────────────────────
 const container = document.getElementById('canvas-container');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000008);
-scene.fog = new THREE.FogExp2(0x000010, 0.00035);
+scene.background = new THREE.Color(0x000010);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
-camera.position.set(0, 45, 120);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 3000);
+camera.position.set(0, 35, 95);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: 'high-performance',
+  alpha: false
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.25;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 container.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.05;
-controls.minDistance = 25;
-controls.maxDistance = 400;
+controls.dampingFactor = 0.06;
+controls.minDistance = 30;
+controls.maxDistance = 500;
 controls.target.set(0, 0, 0);
+controls.update();
 
 // ─────────────────────────────────────────────────────────────
 // Starfield
 // ─────────────────────────────────────────────────────────────
-function createStarfield(count = 4000) {
+function createStarfield(count = 5000) {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
-    const r = 600 + Math.random() * 900;
+    const r = 400 + Math.random() * 1200;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
     positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
@@ -41,7 +48,7 @@ function createStarfield(count = 4000) {
     positions[i * 3 + 2] = r * Math.cos(phi);
 
     const t = Math.random();
-    colors[i * 3]     = 0.7 + t * 0.3;
+    colors[i * 3]     = 0.75 + t * 0.25;
     colors[i * 3 + 1] = 0.8 + t * 0.2;
     colors[i * 3 + 2] = 1.0;
   }
@@ -49,36 +56,36 @@ function createStarfield(count = 4000) {
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const mat = new THREE.PointsMaterial({
-    size: 1.4,
+    size: 1.6,
     vertexColors: true,
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.9
+    opacity: 0.95,
+    depthWrite: false
   });
   return new THREE.Points(geo, mat);
 }
 scene.add(createStarfield());
 
 // ─────────────────────────────────────────────────────────────
-// Lights
+// Lights – stronger so planet is never black
 // ─────────────────────────────────────────────────────────────
-const sunLight = new THREE.DirectionalLight(0xfff4e0, 2.8);
-sunLight.position.set(200, 40, 80);
+const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.2);
+sunLight.position.set(180, 50, 100);
 scene.add(sunLight);
 
-const ambient = new THREE.AmbientLight(0x1a2030, 0.35);
-scene.add(ambient);
+const fillLight = new THREE.DirectionalLight(0x8899bb, 0.55);
+fillLight.position.set(-120, -30, -80);
+scene.add(fillLight);
 
-const rimLight = new THREE.DirectionalLight(0x4060a0, 0.4);
-rimLight.position.set(-100, -20, -50);
-scene.add(rimLight);
+const ambient = new THREE.AmbientLight(0x334466, 0.45);
+scene.add(ambient);
 
 // ─────────────────────────────────────────────────────────────
 // Saturn planet
 // ─────────────────────────────────────────────────────────────
-const SATURN_RADIUS = 18;
+const SATURN_RADIUS = 20;
 
-// Procedural banded texture via canvas
 function createSaturnTexture() {
   const size = 1024;
   const canvas = document.createElement('canvas');
@@ -86,67 +93,73 @@ function createSaturnTexture() {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  // Base gradient
+  // Base warm gradient
   const grad = ctx.createLinearGradient(0, 0, 0, size);
-  grad.addColorStop(0.0, '#c9a36e');
-  grad.addColorStop(0.15, '#d4b07a');
-  grad.addColorStop(0.3, '#b8925a');
-  grad.addColorStop(0.45, '#e0c090');
-  grad.addColorStop(0.55, '#a87c48');
-  grad.addColorStop(0.7, '#c9a36e');
-  grad.addColorStop(0.85, '#d4b07a');
-  grad.addColorStop(1.0, '#b8925a');
+  grad.addColorStop(0.00, '#d4b07a');
+  grad.addColorStop(0.12, '#e8c890');
+  grad.addColorStop(0.25, '#c9a05e');
+  grad.addColorStop(0.40, '#e0bc88');
+  grad.addColorStop(0.55, '#b89050');
+  grad.addColorStop(0.70, '#d4b07a');
+  grad.addColorStop(0.85, '#e8c890');
+  grad.addColorStop(1.00, '#c9a05e');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
-  // Horizontal bands
-  for (let i = 0; i < 40; i++) {
+  // Horizontal atmospheric bands
+  for (let i = 0; i < 55; i++) {
     const y = Math.random() * size;
-    const h = 2 + Math.random() * 12;
-    const alpha = 0.08 + Math.random() * 0.18;
-    ctx.fillStyle = `rgba(${80 + Math.random()*40}, ${50 + Math.random()*30}, ${20}, ${alpha})`;
+    const h = 1 + Math.random() * 14;
+    const alpha = 0.07 + Math.random() * 0.22;
+    const dark = Math.random() > 0.5;
+    if (dark) {
+      ctx.fillStyle = `rgba(90, 60, 25, ${alpha})`;
+    } else {
+      ctx.fillStyle = `rgba(240, 210, 160, ${alpha * 0.7})`;
+    }
     ctx.fillRect(0, y, size, h);
   }
 
   // Subtle noise
   const imgData = ctx.getImageData(0, 0, size, size);
   for (let i = 0; i < imgData.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 18;
+    const n = (Math.random() - 0.5) * 22;
     imgData.data[i]     = Math.min(255, Math.max(0, imgData.data[i] + n));
     imgData.data[i + 1] = Math.min(255, Math.max(0, imgData.data[i + 1] + n * 0.9));
-    imgData.data[i + 2] = Math.min(255, Math.max(0, imgData.data[i + 2] + n * 0.7));
+    imgData.data[i + 2] = Math.min(255, Math.max(0, imgData.data[i + 2] + n * 0.65));
   }
   ctx.putImageData(imgData, 0, 0);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   return tex;
 }
 
-const saturnGeo = new THREE.SphereGeometry(SATURN_RADIUS, 128, 96);
+const saturnGeo = new THREE.SphereGeometry(SATURN_RADIUS, 96, 64);
 const saturnMat = new THREE.MeshStandardMaterial({
   map: createSaturnTexture(),
-  roughness: 0.85,
-  metalness: 0.05
+  roughness: 0.82,
+  metalness: 0.04
 });
 const saturn = new THREE.Mesh(saturnGeo, saturnMat);
 saturn.rotation.z = THREE.MathUtils.degToRad(26.7); // axial tilt
 scene.add(saturn);
 
-// Subtle atmosphere glow
-const atmoGeo = new THREE.SphereGeometry(SATURN_RADIUS * 1.025, 64, 48);
-const atmoMat = new THREE.MeshBasicMaterial({
-  color: 0xd4b08a,
-  transparent: true,
-  opacity: 0.08,
-  side: THREE.BackSide
-});
-const atmo = new THREE.Mesh(atmoGeo, atmoMat);
+// Soft atmosphere rim
+const atmo = new THREE.Mesh(
+  new THREE.SphereGeometry(SATURN_RADIUS * 1.03, 48, 32),
+  new THREE.MeshBasicMaterial({
+    color: 0xd4b08a,
+    transparent: true,
+    opacity: 0.07,
+    side: THREE.BackSide
+  })
+);
 saturn.add(atmo);
 
 // ─────────────────────────────────────────────────────────────
-// Ring system (multiple concentric rings)
+// Ring system
 // ─────────────────────────────────────────────────────────────
 function createRingTexture() {
   const size = 1024;
@@ -154,67 +167,47 @@ function createRingTexture() {
   canvas.width = size;
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
-
-  // Transparent base
   ctx.clearRect(0, 0, size, 64);
 
-  // Ring density profile (approximate real rings)
-  // C ring (inner), B ring (bright), Cassini Division, A ring
+  // Approximate real ring structure
   const bands = [
-    { start: 0.00, end: 0.18, dens: 0.15, color: [180, 160, 130] }, // C
-    { start: 0.18, end: 0.48, dens: 0.85, color: [220, 200, 170] }, // B
-    { start: 0.48, end: 0.55, dens: 0.05, color: [100, 90, 70]  }, // Cassini
-    { start: 0.55, end: 0.82, dens: 0.55, color: [200, 185, 155] }, // A
-    { start: 0.82, end: 0.88, dens: 0.12, color: [160, 145, 120] }, // Encke region
-    { start: 0.88, end: 1.00, dens: 0.25, color: [190, 175, 145] }  // outer A
+    { start: 0.00, end: 0.17, dens: 0.18, color: [190, 170, 140] }, // C
+    { start: 0.17, end: 0.50, dens: 0.90, color: [230, 210, 175] }, // B (bright)
+    { start: 0.50, end: 0.57, dens: 0.04, color: [80, 70, 55]   }, // Cassini
+    { start: 0.57, end: 0.84, dens: 0.60, color: [210, 195, 160] }, // A
+    { start: 0.84, end: 0.90, dens: 0.15, color: [160, 145, 120] },
+    { start: 0.90, end: 1.00, dens: 0.28, color: [195, 180, 150] }
   ];
 
   for (let x = 0; x < size; x++) {
     const t = x / size;
     let dens = 0;
-    let col = [180, 160, 130];
+    let col = [190, 170, 140];
     for (const b of bands) {
       if (t >= b.start && t < b.end) {
-        dens = b.dens;
+        dens = b.dens * (0.75 + 0.25 * Math.sin(t * 90));
         col = b.color;
-        // micro-structure
-        dens *= 0.7 + 0.3 * Math.sin(t * 80 + Math.random());
         break;
       }
     }
-    // radial variation
-    dens *= 0.85 + 0.15 * Math.sin(t * 400);
-
-    const a = Math.floor(dens * 255);
+    dens *= 0.85 + 0.15 * Math.sin(t * 380);
+    const a = Math.floor(Math.min(1, dens) * 255);
     ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${a / 255})`;
     ctx.fillRect(x, 0, 1, 64);
   }
-
-  // Fine particle noise
-  const img = ctx.getImageData(0, 0, size, 64);
-  for (let i = 0; i < img.data.length; i += 4) {
-    if (img.data[i + 3] > 10) {
-      const n = (Math.random() - 0.5) * 30;
-      img.data[i]     = Math.min(255, Math.max(0, img.data[i] + n));
-      img.data[i + 1] = Math.min(255, Math.max(0, img.data[i + 1] + n));
-      img.data[i + 2] = Math.min(255, Math.max(0, img.data[i + 2] + n));
-    }
-  }
-  ctx.putImageData(img, 0, 0);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.anisotropy = 16;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   return tex;
 }
 
-const ringInner = SATURN_RADIUS * 1.2;
-const ringOuter = SATURN_RADIUS * 2.35;
+const ringInner = SATURN_RADIUS * 1.22;
+const ringOuter = SATURN_RADIUS * 2.4;
 
-const ringGeo = new THREE.RingGeometry(ringInner, ringOuter, 256, 8);
-// UV mapping for radial texture
+const ringGeo = new THREE.RingGeometry(ringInner, ringOuter, 256, 6);
 const pos = ringGeo.attributes.position;
 const uv = ringGeo.attributes.uv;
 for (let i = 0; i < pos.count; i++) {
@@ -224,49 +217,48 @@ for (let i = 0; i < pos.count; i++) {
   const u = (r - ringInner) / (ringOuter - ringInner);
   uv.setXY(i, u, 0.5);
 }
-ringGeo.attributes.uv.needsUpdate = true;
+uv.needsUpdate = true;
 
 const ringMat = new THREE.MeshStandardMaterial({
   map: createRingTexture(),
   side: THREE.DoubleSide,
   transparent: true,
   opacity: 0.95,
-  roughness: 0.7,
-  metalness: 0.1,
+  roughness: 0.65,
+  metalness: 0.08,
   depthWrite: false
 });
 const rings = new THREE.Mesh(ringGeo, ringMat);
 rings.rotation.x = -Math.PI / 2;
-rings.rotation.z = THREE.MathUtils.degToRad(26.7); // match axial tilt
+rings.rotation.z = THREE.MathUtils.degToRad(26.7);
 saturn.add(rings);
 
-// Soft particle ring layer for extra realism
+// Extra particle layer for depth
 function createParticleRings() {
-  const count = 8000;
+  const count = 9000;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
     const r = ringInner + Math.random() * (ringOuter - ringInner);
     const theta = Math.random() * Math.PI * 2;
-    // slight vertical thickness
-    const z = (Math.random() - 0.5) * 0.4;
+    const z = (Math.random() - 0.5) * 0.35;
     positions[i * 3]     = r * Math.cos(theta);
     positions[i * 3 + 1] = z;
     positions[i * 3 + 2] = r * Math.sin(theta);
 
     const t = (r - ringInner) / (ringOuter - ringInner);
-    colors[i * 3]     = 0.75 + t * 0.2;
-    colors[i * 3 + 1] = 0.7 + t * 0.15;
-    colors[i * 3 + 2] = 0.55 + t * 0.1;
+    colors[i * 3]     = 0.8 + t * 0.15;
+    colors[i * 3 + 1] = 0.75 + t * 0.12;
+    colors[i * 3 + 2] = 0.6 + t * 0.1;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const mat = new THREE.PointsMaterial({
-    size: 0.25,
+    size: 0.22,
     vertexColors: true,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.5,
     sizeAttenuation: true,
     depthWrite: false
   });
@@ -278,33 +270,27 @@ function createParticleRings() {
 saturn.add(createParticleRings());
 
 // ─────────────────────────────────────────────────────────────
-// Orbital path (ellipse around a distant sun marker)
+// Orbital path + distant sun
 // ─────────────────────────────────────────────────────────────
-const orbitRadius = 280;
-const orbitCurve = new THREE.EllipseCurve(0, 0, orbitRadius, orbitRadius * 0.98, 0, 2 * Math.PI, false, 0);
-const orbitPoints = orbitCurve.getPoints(256);
-const orbitGeo = new THREE.BufferGeometry().setFromPoints(
-  orbitPoints.map(p => new THREE.Vector3(p.x, 0, p.y))
+const orbitRadius = 320;
+const orbitCurve = new THREE.EllipseCurve(0, 0, orbitRadius, orbitRadius * 0.97, 0, Math.PI * 2, false, 0);
+const orbitPts = orbitCurve.getPoints(180).map(p => new THREE.Vector3(p.x, 0, p.y));
+const orbitLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints(orbitPts),
+  new THREE.LineBasicMaterial({ color: 0x3a6a9a, transparent: true, opacity: 0.4 })
 );
-const orbitMat = new THREE.LineBasicMaterial({
-  color: 0x3a6a9a,
-  transparent: true,
-  opacity: 0.35
-});
-const orbitLine = new THREE.Line(orbitGeo, orbitMat);
-orbitLine.visible = true;
 scene.add(orbitLine);
 
-// Distant sun marker
-const sunGeo = new THREE.SphereGeometry(6, 32, 24);
-const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff0c0 });
-const sun = new THREE.Mesh(sunGeo, sunMat);
-sun.position.set(orbitRadius + 40, 0, 0);
+const sun = new THREE.Mesh(
+  new THREE.SphereGeometry(8, 24, 16),
+  new THREE.MeshBasicMaterial({ color: 0xfff0c0 })
+);
+sun.position.set(orbitRadius + 50, 0, 0);
 scene.add(sun);
 
 const sunGlow = new THREE.Mesh(
-  new THREE.SphereGeometry(14, 32, 24),
-  new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.15 })
+  new THREE.SphereGeometry(18, 24, 16),
+  new THREE.MeshBasicMaterial({ color: 0xffe8a0, transparent: true, opacity: 0.18 })
 );
 sun.add(sunGlow);
 
@@ -312,20 +298,17 @@ sun.add(sunGlow);
 // Animation state
 // ─────────────────────────────────────────────────────────────
 let timeScale = 1;
-let showOrbit = true;
 let saturnAngle = 0;
 const clock = new THREE.Clock();
 let frameCount = 0;
 let lastFpsTime = performance.now();
 
-// HUD elements
 const distEl = document.getElementById('dist');
 const timescaleEl = document.getElementById('timescale');
 const fpsEl = document.getElementById('fps');
 
 document.getElementById('btn-orbit').addEventListener('click', () => {
-  showOrbit = !showOrbit;
-  orbitLine.visible = showOrbit;
+  orbitLine.visible = !orbitLine.visible;
 });
 
 document.getElementById('btn-speed').addEventListener('click', () => {
@@ -336,7 +319,7 @@ document.getElementById('btn-speed').addEventListener('click', () => {
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {
-  camera.position.set(0, 45, 120);
+  camera.position.set(0, 35, 95);
   controls.target.set(0, 0, 0);
   controls.update();
 });
@@ -348,25 +331,21 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  // Saturn self-rotation (real ~10.7 h → accelerated)
-  saturn.rotation.y += dt * 0.15 * timeScale;
+  // Self rotation
+  saturn.rotation.y += dt * 0.12 * timeScale;
 
-  // Slow orbital motion around the distant sun
-  saturnAngle += dt * 0.008 * timeScale;
-  const ox = Math.cos(saturnAngle) * orbitRadius;
-  const oz = Math.sin(saturnAngle) * orbitRadius;
-  // Keep planet near origin for viewing; move the orbital path instead
-  // (visual: planet stays centered, path rotates under it)
+  // Slow orbit visualization
+  saturnAngle += dt * 0.006 * timeScale;
   orbitLine.rotation.y = -saturnAngle;
 
-  // Distance readout (fake AU-scale for display)
+  // HUD
   const camDist = camera.position.length();
-  distEl.textContent = (camDist * 0.08).toFixed(1) + ' Rₛ';
+  distEl.textContent = (camDist * 0.07).toFixed(1) + ' Rₛ';
 
   controls.update();
   renderer.render(scene, camera);
 
-  // FPS counter
+  // FPS
   frameCount++;
   const now = performance.now();
   if (now - lastFpsTime >= 1000) {
@@ -377,10 +356,9 @@ function animate() {
 }
 
 animate();
+console.log('Saturn simulation running');
 
-// ─────────────────────────────────────────────────────────────
 // Resize
-// ─────────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();

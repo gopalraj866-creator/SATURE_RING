@@ -1,96 +1,84 @@
 # Saturn & Rings — Live 3D Simulation → YouTube Stream
 
 Real-time interactive simulation of Saturn and its ring system built with **Three.js**.  
-This repo includes a **GitHub Actions workflow** that streams the simulation directly to YouTube using your stream key.
+Includes a **GitHub Actions workflow** that streams the simulation directly to YouTube using your stream key.
+
+---
+
+## IMPORTANT – How to run correctly
+
+**Do NOT just double-click `index.html`.**  
+Browsers block ES modules when opened as `file://`, so you will see a black screen.
+
+### Correct way (local preview)
+
+```bash
+# From the project folder:
+npx serve .
+# or
+python -m http.server 8080
+```
+
+Then open the URL it shows (usually http://localhost:3000 or http://localhost:8080).
+
+You should see Saturn + rings + stars immediately.
 
 ---
 
 ## Features
 
-- High-quality procedural Saturn texture with atmospheric bands  
-- Multi-layer ring system (C · B · Cassini Division · A) + particle overlay  
-- Accurate axial tilt (~26.7°)  
-- Starfield background + distant Sun + orbital path  
-- Adjustable time scale, orbit toggle, camera controls  
-- Fully automated YouTube streaming via GitHub Actions  
+- Procedural Saturn texture with atmospheric bands
+- Multi-layer rings (C · B · Cassini · A) + particle overlay
+- Correct axial tilt (26.7°)
+- Starfield + distant Sun + orbital path
+- Time-scale control, orbit toggle, camera reset
+- Automated YouTube streaming via GitHub Actions
 
 ---
 
-## 1. Quick local preview
+## Stream to YouTube with GitHub Actions
 
-```bash
-# just open the file
-open index.html
+### 1. Add your Stream Key
 
-# or serve it (recommended)
-npx serve .
-# → http://localhost:3000
-```
+1. YouTube Studio → **Go Live** → copy **Stream key**
+2. GitHub repo → **Settings → Secrets and variables → Actions**
+3. New secret:
+   - Name: `YOUTUBE_STREAM_KEY`
+   - Value: paste the key
 
----
+### 2. Start the stream
 
-## 2. Stream to YouTube with GitHub Actions
+1. Go to **Actions** tab
+2. Select **“Stream Saturn to YouTube”**
+3. Click **Run workflow**
+4. Choose duration / resolution / FPS
+5. Run
 
-### Step A – Add your YouTube Stream Key as a secret
+The workflow opens the simulation in headless Chromium and pushes it to YouTube via RTMP.
 
-1. Go to **YouTube Studio** → **Go Live** → **Stream**  
-2. Copy your **Stream key** (looks like `xxxx-xxxx-xxxx-xxxx-xxxx`)  
-3. In your GitHub repository:  
-   **Settings → Secrets and variables → Actions → New repository secret**  
-   - Name: `YOUTUBE_STREAM_KEY`  
-   - Value: paste the stream key  
-
-(Optional) If you use a different ingest server, also create:  
-`YOUTUBE_RTMP_URL` = `rtmp://a.rtmp.youtube.com/live2` (default)
-
-### Step B – Start the stream
-
-1. Open the **Actions** tab of your repository  
-2. Select **“Stream Saturn to YouTube”** on the left  
-3. Click **Run workflow**  
-4. Choose:  
-   - Duration (minutes) – max ~330 on free runners  
-   - Resolution (`1920x1080` recommended)  
-   - FPS (`30` recommended)  
-5. Click the green **Run workflow** button  
-
-The workflow will:
-- Start a virtual display  
-- Open the Saturn simulation in Chromium (kiosk / full-screen)  
-- Capture the screen with FFmpeg  
-- Push the live RTMP stream to YouTube  
-
-You will see the stream appear in YouTube Studio within ~20–40 seconds.
-
-### Important notes
-
-| Topic | Detail |
-|-------|--------|
-| Free runner limit | GitHub-hosted runners max ~6 hours per job |
-| 24/7 streaming | Use a self-hosted runner or a cheap VPS |
-| YouTube requirements | Channel must be verified + Live Streaming enabled |
-| Audio | Silent (null audio) – add music later in OBS if you want |
-| First run | May take 1–2 extra minutes while packages install |
+> Free GitHub runners have a ~6 hour limit.  
+> For longer streams use a self-hosted runner or VPS.
 
 ---
 
-## 3. Manual streaming (OBS method)
+## Manual streaming with OBS (recommended for quality)
 
-If you prefer classic OBS:
+1. Serve the page: `npx serve .`
+2. In OBS → Add **Browser Source**
+3. URL: `http://localhost:3000` (or whatever port)
+4. Width × Height: 1920 × 1080
+5. Start streaming to YouTube normally
 
-1. Serve the page: `npx serve .`  
-2. In OBS → Add **Browser Source** → URL `http://localhost:3000`  
-3. Set width/height to 1920×1080  
-4. Start streaming to YouTube with your normal stream key  
+This usually gives better quality and stability than the GitHub Action method.
 
 ---
 
-## Controls (when viewing locally)
+## Controls
 
 | Action            | Input                  |
 |-------------------|------------------------|
-| Orbit camera      | Left-drag / one-finger |
-| Zoom              | Scroll / pinch         |
+| Orbit camera      | Left-drag              |
+| Zoom              | Scroll                 |
 | Pan               | Right-drag             |
 | Toggle orbit path | Button                 |
 | Change time scale | Button                 |
@@ -98,14 +86,14 @@ If you prefer classic OBS:
 
 ---
 
-## Tech stack
+## Tech
 
-- Three.js r170 (ES modules + import map)  
-- Procedural canvas textures (zero external images)  
-- GitHub Actions + Xvfb + Chromium + FFmpeg → YouTube RTMP  
+- Three.js r170 (ES modules)
+- Procedural canvas textures (no external images)
+- GitHub Actions + Xvfb + Chromium + FFmpeg → YouTube
 
 ---
 
 ## License
 
-MIT — free for personal & commercial use, including live streams.
+MIT — free for personal & commercial use including live streams.
